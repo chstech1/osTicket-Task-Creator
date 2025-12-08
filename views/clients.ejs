@@ -1,0 +1,44 @@
+<%- include('partials/header', { title }) %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-0">Clients</h1>
+    <p class="text-muted">Manage clients stored in clients.json.</p>
+  </div>
+  <button class="btn btn-primary" id="addClientBtn">Add Client</button>
+</div>
+<div id="clientAlert" class="alert d-none" role="alert"></div>
+<table class="table table-striped" id="clientsTable">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Notes</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<div class="card mt-4 d-none" id="clientFormCard">
+  <div class="card-body">
+    <h5 class="card-title" id="clientFormTitle">Add Client</h5>
+    <form id="clientForm">
+      <input type="hidden" id="clientId" />
+      <div class="mb-3">
+        <label class="form-label" for="clientName">Name</label>
+        <input class="form-control" id="clientName" name="name" required />
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="clientNotes">Notes</label>
+        <textarea class="form-control" id="clientNotes" name="notes" rows="3"></textarea>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-success" type="submit">Save</button>
+        <button class="btn btn-secondary" type="button" id="cancelClientBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  const clientsData = <%- JSON.stringify(clients) %>;
+</script>
+<script src="/js/clients.js"></script>
+<%- include('partials/footer') %>

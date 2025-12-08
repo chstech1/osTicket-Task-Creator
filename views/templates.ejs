@@ -1,0 +1,50 @@
+<%- include('partials/header', { title }) %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-0">Task Templates</h1>
+    <p class="text-muted">Create recurring task definitions stored in templates.json.</p>
+  </div>
+  <a class="btn btn-primary" href="/templates/new">New Template</a>
+</div>
+<% if (dbError) { %>
+  <div class="alert alert-warning">Unable to load live osTicket reference data: <%= dbError %></div>
+<% } %>
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label" for="clientFilter">Filter by client</label>
+        <select class="form-select" id="clientFilter">
+          <option value="">All clients</option>
+          <% clients.forEach((client) => { %>
+            <option value="<%= client.id %>" <%= clientFilter === client.id ? 'selected' : '' %>><%= client.name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <div id="templateAlert" class="alert d-none" role="alert"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<table class="table table-striped" id="templatesTable">
+  <thead>
+    <tr>
+      <th>Title</th>
+      <th>Client</th>
+      <th>Department</th>
+      <th>Assignee</th>
+      <th>Recurrence</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<script>
+  const templatesData = <%- JSON.stringify(templates) %>;
+  const clientsData = <%- JSON.stringify(clients) %>;
+  const referenceData = <%- JSON.stringify(referenceData) %>;
+</script>
+<script src="/js/recurrence.js"></script>
+<script src="/js/templates.js"></script>
+<%- include('partials/footer') %>
