@@ -156,7 +156,7 @@ async function run() {
     if (!match) continue;
 
     try {
-      const { taskId, data } = await createTaskFromTemplate({
+      const { taskId, data } = await db.createTaskFromTemplate({
         template,
         dueDate: match.dueDate,
         creationDate: match.creationDate
