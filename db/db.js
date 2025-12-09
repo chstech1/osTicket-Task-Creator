@@ -17,6 +17,18 @@ const configPath = path.join(__dirname, 'config.json');
 let pool;
 let initError;
 
+function formatDateTime(date) {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function nextTaskNumber() {
+  const random = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, '0');
+  const now = Date.now().toString().slice(-8);
+  return `T${now}${random}`;
+}
+
 function loadConfig() {
   if (!fs.existsSync(configPath)) {
     throw new Error(`Database config file missing at ${configPath}`);
@@ -74,6 +86,45 @@ function assertReady() {
   }
 }
 
+async function createTaskFromTemplate({ template, dueDate, creationDate }) {
+  assertReady();
+  const connection = await pool.getConnection();
+
+  try {
+    const [columnsResult] = await connection.query('SHOW COLUMNS FROM ost_task');
+    const availableColumns = new Set(columnsResult.map((col) => col.Field));
+
+    const payload = {};
+    if (availableColumns.has('number')) payload.number = nextTaskNumber();
+    if (availableColumns.has('dept_id')) payload.dept_id = template.departmentId ?? null;
+    if (availableColumns.has('staff_id') && template.assignee?.type === 'staff') {
+      payload.staff_id = template.assignee.id;
+    }
+    if (availableColumns.has('team_id') && template.assignee?.type === 'team') {
+      payload.team_id = template.assignee.id;
+    }
+    if (availableColumns.has('title')) payload.title = template.title;
+    if (availableColumns.has('duedate') && dueDate) payload.duedate = formatDateTime(dueDate);
+    if (availableColumns.has('est_duedate') && dueDate) payload.est_duedate = formatDateTime(dueDate);
+
+    const createdAt = formatDateTime(creationDate || new Date());
+    if (availableColumns.has('created')) payload.created = createdAt;
+    if (availableColumns.has('updated')) payload.updated = createdAt;
+
+    if (!Object.keys(payload).length) {
+      throw new Error('Could not determine suitable columns for ost_task insert.');
+    }
+
+    const [result] = await connection.query('INSERT INTO ost_task SET ?', payload);
+
+    return { taskId: result.insertId, data: payload };
+  } catch (err) {
+    throw new Error('Failed to create task from template: ' + err.message);
+  } finally {
+    connection.release();
+  }
+}
+
 async function getDepartments() {
   assertReady();
   try {
@@ -127,5 +178,6 @@ module.exports = {
   getTeams,
   getStaff,
   columns,
-  getStatus
+  getStatus,
+  createTaskFromTemplate
 };
