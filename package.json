@@ -4,8 +4,7 @@
   "description": "Simple web app to manage osTicket task templates stored in JSON",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "run:cron": "node scripts/run-template-job.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "ejs": "^3.1.10",

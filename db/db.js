@@ -74,57 +74,6 @@ function assertReady() {
   }
 }
 
-function toDateTimeString(input, defaultTime = '00:00:00') {
-  if (!input) return null;
-  const date = input instanceof Date ? input : new Date(input);
-  const iso = date.toISOString();
-  return `${iso.slice(0, 10)} ${iso.slice(11, 19) || defaultTime}`;
-}
-
-async function createTaskFromTemplate({ template, dueDate, creationDate }) {
-  assertReady();
-
-  const conn = await pool.getConnection();
-  const createdAt = creationDate ? toDateTimeString(creationDate) : toDateTimeString(new Date());
-  const dueAt = dueDate ? toDateTimeString(dueDate) : null;
-  const staffId = template.assignee?.type === 'staff' ? Number(template.assignee.id) || 0 : 0;
-  const teamId = template.assignee?.type === 'team' ? Number(template.assignee.id) || 0 : 0;
-
-  const taskPayload = {
-    object_id: 0,
-    object_type: 'T',
-    number: `T${Date.now()}`,
-    dept_id: Number(template.departmentId) || 0,
-    staff_id: staffId,
-    team_id: teamId,
-    lock_id: 0,
-    flags: 0,
-    duedate: dueAt,
-    closed: null,
-    created: createdAt,
-    updated: createdAt
-  };
-
-  const cdataPayload = {
-    title: template.title || ''
-  };
-
-  try {
-    await conn.beginTransaction();
-    const [taskResult] = await conn.query('INSERT INTO ost_task SET ?', taskPayload);
-    const taskId = taskResult.insertId;
-    cdataPayload.task_id = taskId;
-    await conn.query('INSERT INTO ost_task__cdata SET ?', cdataPayload);
-    await conn.commit();
-    return { taskId, data: { task: taskPayload, cdata: cdataPayload } };
-  } catch (err) {
-    await conn.rollback();
-    throw new Error('Failed to create osTicket task: ' + err.message);
-  } finally {
-    conn.release();
-  }
-}
-
 async function getDepartments() {
   assertReady();
   try {
@@ -178,6 +127,5 @@ module.exports = {
   getTeams,
   getStaff,
   columns,
-  getStatus,
-  createTaskFromTemplate
+  getStatus
 };
