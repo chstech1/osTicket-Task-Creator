@@ -1,0 +1,83 @@
+<%- include('partials/header', { title }) %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-0"><%= mode === 'create' ? 'Create Template' : 'Edit Template' %></h1>
+    <p class="text-muted">Fill out the details to store in templates.json.</p>
+  </div>
+  <a class="btn btn-secondary" href="/templates">Back to list</a>
+</div>
+<% if (dbError) { %>
+  <div class="alert alert-warning">Unable to load osTicket reference data: <%= dbError %></div>
+<% } %>
+<div id="formAlert" class="alert d-none" role="alert"></div>
+<form id="templateForm" class="card">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="title">Title</label>
+        <input class="form-control" id="title" name="title" required />
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="clientId">Client</label>
+        <select class="form-select" id="clientId" name="clientId" required>
+          <option value="">Select client</option>
+          <% clients.forEach((client) => { %>
+            <option value="<%= client.id %>"><%= client.name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="description">Description</label>
+        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="departmentId">Department</label>
+        <select class="form-select" id="departmentId" name="departmentId" required></select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label d-block">Assignee</label>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="assigneeType" id="assigneeStaff" value="staff" checked />
+          <label class="form-check-label" for="assigneeStaff">Staff</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="radio" name="assigneeType" id="assigneeTeam" value="team" />
+          <label class="form-check-label" for="assigneeTeam">Team</label>
+        </div>
+        <div class="mt-2" id="assigneeSelectWrapper"></div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="firstDueDate">First Due Date</label>
+        <input class="form-control" type="date" id="firstDueDate" name="firstDueDate" required />
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="daysBefore">Days Before Due Date To Create</label>
+        <input class="form-control" type="number" min="0" id="daysBefore" name="daysBefore" value="0" />
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="recurrenceType">Recurrence Type</label>
+        <select class="form-select" id="recurrenceType" name="recurrenceType" required>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="col-12" id="recurrenceFields"></div>
+    </div>
+  </div>
+  <div class="card-footer d-flex gap-2">
+    <button class="btn btn-success" type="submit"><%= mode === 'create' ? 'Create Template' : 'Update Template' %></button>
+    <a class="btn btn-secondary" href="/templates">Cancel</a>
+  </div>
+</form>
+<script>
+  const templateData = <%- JSON.stringify(template || null) %>;
+  const referenceData = <%- JSON.stringify(referenceData) %>;
+  const mode = '<%= mode %>';
+</script>
+<script src="/js/recurrence.js"></script>
+<script src="/js/template-form.js"></script>
+<%- include('partials/footer') %>
