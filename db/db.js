@@ -17,6 +17,18 @@ const configPath = path.join(__dirname, 'config.json');
 let pool;
 let initError;
 
+function formatDateTime(date) {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function nextTaskNumber() {
+  const random = Math.floor(Math.random() * 10000)
+    .toString()
+    .padStart(4, '0');
+  const now = Date.now().toString().slice(-8);
+  return `T${now}${random}`;
+}
+
 function loadConfig() {
   if (!fs.existsSync(configPath)) {
     throw new Error(`Database config file missing at ${configPath}`);
