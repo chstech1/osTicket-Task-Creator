@@ -133,8 +133,8 @@ async function createTaskFromTemplate({ template, dueDate, creationDate }) {
     await conn.query('UPDATE ost_sequence SET next = ?, updated = NOW() WHERE id = ? LIMIT 1', [taskNumber + 1, 2]);
 
     const [taskResult] = await conn.query(
-      `INSERT INTO ost_task (number, dept_id, staff_id, team_id, flags, duedate, closed, created, updated)
-       VALUES (?, ?, ?, ?, 1, ?, NULL, ?, ?)`,
+      `INSERT INTO ost_task (object_id, object_type, number, dept_id, staff_id, team_id, flags, duedate, closed, created, updated)
+       VALUES (0, 'A', ?, ?, ?, ?, 1, ?, NULL, ?, ?)`,
       [String(taskNumber), Number(template.departmentId) || 0, staffId || 0, teamId || 0, dueAt, createdAt, createdAt]
     );
     const taskId = taskResult.insertId;
