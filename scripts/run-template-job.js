@@ -444,7 +444,16 @@ async function run() {
   }
 }
 
-run().catch((err) => {
-  console.error('Template cron job failed:', err);
-  process.exitCode = 1;
-});
+run()
+  .catch((err) => {
+    console.error('Template cron job failed:', err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    try {
+      await pool.end();
+      console.log('[debug] MySQL pool closed.');
+    } catch (closeErr) {
+      console.error('Failed to close MySQL pool:', closeErr.message);
+    }
+  });
