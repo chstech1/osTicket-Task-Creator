@@ -203,8 +203,8 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
 
     const creationEventData = JSON.stringify({ type: 'task.created', title: template.title || '' });
     sql =
-      `INSERT INTO ost_thread_event (thread_id, thread_type, staff_id, team_id, dept_id, uid_type, uid, username, timestamp, data)
-       VALUES (?, 'A', ?, ?, ?, 'S', ?, ?, NOW(), ?)`;
+      `INSERT INTO ost_thread_event (thread_id, thread_type, staff_id, team_id, dept_id, topic_id, uid_type, uid, username, timestamp, data)
+       VALUES (?, 'A', ?, ?, ?, 0, 'S', ?, ?, NOW(), ?)`;
     logQuery(log, sql, [
       threadId,
       staffId || null,
