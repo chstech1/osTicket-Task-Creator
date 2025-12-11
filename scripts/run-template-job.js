@@ -101,33 +101,55 @@ function fastForwardDailyLike(due, today, daysBefore, intervalDays) {
   return { due, creation };
 }
 
-function getCreationForDate(template, today) {
+function getCreationForDate(template, today, log = () => {}) {
   const recurrence = template.recurrence || {};
   const daysBefore = Math.max(0, Number(template.daysBeforeDueDateToCreate || 0));
   let due = initialDueDate(template);
   const maxIterations = 50000; // high ceiling for long-lived schedules
   let iterations = 0;
-  
+
+  log('Evaluating creation schedule', {
+    firstDueDate: due.toISOString().slice(0, 10),
+    recurrence: recurrence.type || 'none',
+    daysBeforeDueDateToCreate: daysBefore
+  });
+
   while (iterations < maxIterations) {
     const creationDate = addDays(due, -daysBefore);
+    log('Iteration check', {
+      dueDate: due.toISOString().slice(0, 10),
+      creationDate: creationDate.toISOString().slice(0, 10)
+    });
+
     if (creationDate.getTime() === today.getTime()) {
+      log('Creation date matches today.');
       return { dueDate: due, creationDate };
     }
     if (creationDate.getTime() > today.getTime()) {
+      log('Creation date is in the future; stopping evaluation.');
       return null;
     }
     if (['daily', 'custom'].includes(recurrence.type)) {
       const interval = Math.max(1, Number((recurrence.daily || recurrence.custom)?.intervalDays || 1));
       const fast = fastForwardDailyLike(due, today, daysBefore, interval);
+      log('Fast-forwarded daily/custom recurrence', {
+        intervalDays: interval,
+        newDueDate: fast.due.toISOString().slice(0, 10)
+      });
       due = fast.due;
     } else if (recurrence.type === 'weekly') {
       const intervalWeeks = Math.max(1, Number(recurrence.weekly?.intervalWeeks || 1));
       const intervalDays = intervalWeeks * 7;
       const fast = fastForwardDailyLike(due, today, daysBefore, intervalDays);
+      log('Fast-forwarded weekly recurrence', {
+        intervalWeeks,
+        newDueDate: fast.due.toISOString().slice(0, 10)
+      });
       due = fast.due;
     } else {
       const nextDue = nextDueDate(due, recurrence);
       if (!nextDue) {
+        log('No next due date could be calculated; stopping evaluation.');
         return null;
       }
       if (nextDue.getTime() === due.getTime()) {
@@ -143,6 +165,13 @@ function getCreationForDate(template, today) {
 }
 
 async function run() {
+  const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
+  const logVerbose = (...args) => {
+    if (verbose) {
+      console.log('[debug]', ...args);
+    }
+  };
+
   const today = toDateOnly(new Date());
   const [templates, clients] = await Promise.all([templatesStore.getAll(), clientsStore.getAll()]);
   const existing = await fileStore.readJson(OUTPUT_PATH);
@@ -151,15 +180,32 @@ async function run() {
   const failed = [];
   const clientNameById = new Map(clients.map((c) => [c.id, c.name]));
 
+  logVerbose('Job start', {
+    today: today.toISOString().slice(0, 10),
+    templateCount: templates.length,
+    clientCount: clients.length
+  });
+
   for (const template of templates) {
-    const match = getCreationForDate(template, today);
-    if (!match) continue;
+    const scopedLog = (...args) => logVerbose(`[template ${template.id} - ${template.title}]`, ...args);
+    scopedLog('Evaluating template');
+    const match = getCreationForDate(template, today, scopedLog);
+    if (!match) {
+      scopedLog('No creation scheduled for today.');
+      continue;
+    }
 
     try {
       const { taskId, data } = await db.createTaskFromTemplate({
         template,
         dueDate: match.dueDate,
         creationDate: match.creationDate
+      });
+
+      scopedLog('Task created', {
+        taskId,
+        dueDate: match.dueDate.toISOString().slice(0, 10),
+        creationDate: match.creationDate.toISOString().slice(0, 10)
       });
 
       const audit = {
@@ -176,6 +222,7 @@ async function run() {
       existing.push(audit);
       created.push(audit);
     } catch (err) {
+      scopedLog('Failed to create task from template', err.message);
       failed.push({ templateId: template.id, title: template.title, error: err.message });
     }
   }

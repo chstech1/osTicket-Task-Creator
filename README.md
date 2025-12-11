@@ -98,6 +98,8 @@ node scripts/run-template-job.js
 
 The script prints either a "Created X task instance(s)" message with the due dates it found or "No task templates are scheduled to create today." if nothing matches. If any template fails to insert into the database, the script logs the error per template and exits with a non-zero status so cron can alert you.
 
+Pass `--verbose` (or `-v`) to emit detailed debug logs while the script runs. The extra output includes schedule evaluation steps for each template (iteration checkpoints, recurrence fast-forwards, and creation/due date matches) plus per-template outcomes when inserting tasks.
+
 ### Example cron entries
 - **Every day at 12:01 AM** (one minute after midnight):
   ```
