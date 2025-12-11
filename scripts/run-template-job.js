@@ -203,14 +203,46 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
 
     const creationEventData = JSON.stringify({ type: 'task.created', title: template.title || '' });
     sql =
-      `INSERT INTO ost_thread_event (thread_id, thread_type, staff_id, team_id, uid_type, uid, username, timestamp, data)
-       VALUES (?, 'A', ?, ?, 'S', ?, ?, NOW(), ?)`;
-    logQuery(log, sql, [threadId, staffId || null, teamId || 0, staffId || null, staffUsername, creationEventData]);
-    await conn.query(sql, [threadId, staffId || null, teamId || 0, staffId || null, staffUsername, creationEventData]);
+      `INSERT INTO ost_thread_event (thread_id, thread_type, staff_id, team_id, dept_id, uid_type, uid, username, timestamp, data)
+       VALUES (?, 'A', ?, ?, ?, 'S', ?, ?, NOW(), ?)`;
+    logQuery(log, sql, [
+      threadId,
+      staffId || null,
+      teamId || 0,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffUsername,
+      creationEventData
+    ]);
+    await conn.query(sql, [
+      threadId,
+      staffId || null,
+      teamId || 0,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffUsername,
+      creationEventData
+    ]);
 
     const assignEventData = JSON.stringify({ type: 'task.assigned', assignee: staffId || null });
-    logQuery(log, sql, [threadId, staffId || null, teamId || 0, staffId || null, staffUsername, assignEventData]);
-    await conn.query(sql, [threadId, staffId || null, teamId || 0, staffId || null, staffUsername, assignEventData]);
+    logQuery(log, sql, [
+      threadId,
+      staffId || null,
+      teamId || 0,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffUsername,
+      assignEventData
+    ]);
+    await conn.query(sql, [
+      threadId,
+      staffId || null,
+      teamId || 0,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffUsername,
+      assignEventData
+    ]);
 
     if (staffId) {
       sql = 'UPDATE ost_task SET staff_id = ? WHERE id = ? LIMIT 1';
