@@ -203,42 +203,14 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
 
     const creationEventData = JSON.stringify({ type: 'task.created', title: template.title || '' });
     sql =
-      `INSERT INTO ost_thread_event (thread_id, thread_type, dept_id, staff_id, uid_type, uid, username, timestamp, data)
-       VALUES (?, 'A', ?, ?, 'S', ?, ?, NOW(), ?)`;
-    logQuery(log, sql, [
-      threadId,
-      Number(template.departmentId) || null,
-      staffId || null,
-      staffId || null,
-      staffUsername,
-      creationEventData
-    ]);
-    await conn.query(sql, [
-      threadId,
-      Number(template.departmentId) || null,
-      staffId || null,
-      staffId || null,
-      staffUsername,
-      creationEventData
-    ]);
+      `INSERT INTO ost_thread_event (thread_id, thread_type, staff_id, uid_type, uid, username, timestamp, data)
+       VALUES (?, 'A', ?, 'S', ?, ?, NOW(), ?)`;
+    logQuery(log, sql, [threadId, staffId || null, staffId || null, staffUsername, creationEventData]);
+    await conn.query(sql, [threadId, staffId || null, staffId || null, staffUsername, creationEventData]);
 
     const assignEventData = JSON.stringify({ type: 'task.assigned', assignee: staffId || null });
-    logQuery(log, sql, [
-      threadId,
-      Number(template.departmentId) || null,
-      staffId || null,
-      staffId || null,
-      staffUsername,
-      assignEventData
-    ]);
-    await conn.query(sql, [
-      threadId,
-      Number(template.departmentId) || null,
-      staffId || null,
-      staffId || null,
-      staffUsername,
-      assignEventData
-    ]);
+    logQuery(log, sql, [threadId, staffId || null, staffId || null, staffUsername, assignEventData]);
+    await conn.query(sql, [threadId, staffId || null, staffId || null, staffUsername, assignEventData]);
 
     if (staffId) {
       sql = 'UPDATE ost_task SET staff_id = ? WHERE id = ? LIMIT 1';
@@ -363,12 +335,8 @@ function getCreationForDate(template, today, log = () => {}) {
 async function run() {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
   const logVerbose = (...args) => {
-    const isSql = typeof args[0] === 'string' && args[0].startsWith('[sql]');
-    if (isSql) {
-      console.log('[debug]', ...args);
-      return;
-    }
-    if (verbose) {
+    const isSql = args.some((arg) => typeof arg === 'string' && arg.includes('[sql]'));
+    if (isSql || verbose) {
       console.log('[debug]', ...args);
     }
   };
