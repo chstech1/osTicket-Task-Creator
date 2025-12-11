@@ -88,12 +88,17 @@ function toDateTimeString(date) {
   return `${iso.slice(0, 10)} ${iso.slice(11, 19)}`;
 }
 
-async function fetchStaff(conn, staffId) {
+function logQuery(logFn, sql, params) {
+  const trimmed = sql.replace(/\s+/g, ' ').trim();
+  const paramLog = Array.isArray(params) && params.length ? ` | params: ${JSON.stringify(params)}` : '';
+  logFn(`[sql] ${trimmed}${paramLog}`);
+}
+
+async function fetchStaff(conn, staffId, logFn = console.log) {
   if (!staffId) return null;
-  const [rows] = await conn.query(
-    'SELECT staff_id, firstname, lastname, username FROM ost_staff WHERE staff_id = ? LIMIT 1',
-    [staffId]
-  );
+  const sql = 'SELECT staff_id, firstname, lastname, username FROM ost_staff WHERE staff_id = ? LIMIT 1';
+  logQuery(logFn, sql, [staffId]);
+  const [rows] = await conn.query(sql, [staffId]);
   return rows[0] || null;
 }
 
@@ -103,7 +108,7 @@ function buildPoster(staff) {
   return staff.username ? `${name} [${staff.username}]` : name;
 }
 
-async function createTaskFromTemplate({ template, dueDate, creationDate }) {
+async function createTaskFromTemplate({ template, dueDate, creationDate, log = console.log }) {
   if (typeof db.getStatus === 'function') {
     const status = db.getStatus();
     if (status.hasError) {
@@ -119,89 +124,129 @@ async function createTaskFromTemplate({ template, dueDate, creationDate }) {
   const conn = await pool.getConnection();
 
   try {
+    log('[sql] BEGIN');
     await conn.beginTransaction();
 
-    const staff = await fetchStaff(conn, staffId);
+    const staff = await fetchStaff(conn, staffId, log);
     const staffPoster = buildPoster(staff);
     const staffUsername = staff?.username || null;
 
-    const [seqRows] = await conn.query('SELECT * FROM ost_sequence WHERE id = ? FOR UPDATE', [2]);
+    let sql = 'SELECT * FROM ost_sequence WHERE id = ? FOR UPDATE';
+    logQuery(log, sql, [2]);
+    const [seqRows] = await conn.query(sql, [2]);
     if (!seqRows.length) {
       throw new Error('Task sequence (id=2) is missing.');
     }
     const taskNumber = seqRows[0].next;
-    await conn.query('UPDATE ost_sequence SET next = ?, updated = NOW() WHERE id = ? LIMIT 1', [taskNumber + 1, 2]);
+    sql = 'UPDATE ost_sequence SET next = ?, updated = NOW() WHERE id = ? LIMIT 1';
+    logQuery(log, sql, [taskNumber + 1, 2]);
+    await conn.query(sql, [taskNumber + 1, 2]);
 
-    const [taskResult] = await conn.query(
+    sql =
       `INSERT INTO ost_task (object_id, object_type, number, dept_id, staff_id, team_id, flags, duedate, closed, created, updated)
-       VALUES (0, 'A', ?, ?, ?, ?, 1, ?, NULL, ?, ?)`,
-      [String(taskNumber), Number(template.departmentId) || 0, staffId || 0, teamId || 0, dueAt, createdAt, createdAt]
-    );
+       VALUES (0, 'A', ?, ?, ?, ?, 1, ?, NULL, ?, ?)`;
+    logQuery(log, sql, [
+      String(taskNumber),
+      Number(template.departmentId) || 0,
+      staffId || 0,
+      teamId || 0,
+      dueAt,
+      createdAt,
+      createdAt
+    ]);
+    const [taskResult] = await conn.query(sql, [
+      String(taskNumber),
+      Number(template.departmentId) || 0,
+      staffId || 0,
+      teamId || 0,
+      dueAt,
+      createdAt,
+      createdAt
+    ]);
     const taskId = taskResult.insertId;
 
-    const [formEntryResult] = await conn.query(
+    sql =
       `INSERT INTO ost_form_entry (form_id, sort, created, updated, object_type, object_id)
-       VALUES (?, 1, NOW(), NOW(), 'A', ?)`,
-      [MAIN_TASK_FORM_ID, taskId]
-    );
+       VALUES (?, 1, NOW(), NOW(), 'A', ?)`;
+    logQuery(log, sql, [MAIN_TASK_FORM_ID, taskId]);
+    const [formEntryResult] = await conn.query(sql, [MAIN_TASK_FORM_ID, taskId]);
     const formEntryId = formEntryResult.insertId;
 
-    await conn.query(
-      `INSERT INTO ost_form_entry_values (field_id, value, entry_id) VALUES (?, ?, ?)`,
-      [TITLE_FIELD_ID, template.title || '', formEntryId]
-    );
-    await conn.query(
-      `INSERT INTO ost_form_entry_values (field_id, value, entry_id) VALUES (?, ?, ?)`,
-      [DESCRIPTION_FIELD_ID, template.description || '', formEntryId]
-    );
+    sql = `INSERT INTO ost_form_entry_values (field_id, value, entry_id) VALUES (?, ?, ?)`;
+    logQuery(log, sql, [TITLE_FIELD_ID, template.title || '', formEntryId]);
+    await conn.query(sql, [TITLE_FIELD_ID, template.title || '', formEntryId]);
+    logQuery(log, sql, [DESCRIPTION_FIELD_ID, template.description || '', formEntryId]);
+    await conn.query(sql, [DESCRIPTION_FIELD_ID, template.description || '', formEntryId]);
 
-    await conn.query(
-      `INSERT INTO ost_task__cdata (task_id, title, dept_id, staff_id, due_date)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE title = VALUES(title), dept_id = VALUES(dept_id), staff_id = VALUES(staff_id), due_date = VALUES(due_date)`,
-      [taskId, template.title || '', Number(template.departmentId) || null, staffId || null, dueAt]
-    );
+    sql =
+      `INSERT INTO ost_task__cdata (task_id, title)
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE title = VALUES(title)`;
+    logQuery(log, sql, [taskId, template.title || '']);
+    await conn.query(sql, [taskId, template.title || '']);
 
-    const [threadResult] = await conn.query(
-      `INSERT INTO ost_thread (object_id, object_type, created) VALUES (?, 'A', NOW())`,
-      [taskId]
-    );
+    sql = `INSERT INTO ost_thread (object_id, object_type, created) VALUES (?, 'A', NOW())`;
+    logQuery(log, sql, [taskId]);
+    const [threadResult] = await conn.query(sql, [taskId]);
     const threadId = threadResult.insertId;
 
-    const [entryResult] = await conn.query(
+    sql =
       `INSERT INTO ost_thread_entry (created, updated, type, thread_id, format, staff_id, poster, title, body, flags)
-       VALUES (NOW(), NOW(), 'M', ?, 'html', ?, ?, ?, ?, 0)`
-      ,
-      [threadId, staffId || 0, staffPoster, template.title || '', template.description || '']
-    );
+       VALUES (NOW(), NOW(), 'M', ?, 'html', ?, ?, ?, ?, 0)`;
+    logQuery(log, sql, [threadId, staffId || 0, staffPoster, template.title || '', template.description || '']);
+    const [entryResult] = await conn.query(sql, [threadId, staffId || 0, staffPoster, template.title || '', template.description || '']);
     const threadEntryId = entryResult.insertId;
 
-    await conn.query(
-      `REPLACE INTO ost__search (object_type, object_id, content, title) VALUES ('H', ?, ?, ?)`
-      ,
-      [threadEntryId, template.description || '', template.title || '']
-    );
+    sql = `REPLACE INTO ost__search (object_type, object_id, content, title) VALUES ('H', ?, ?, ?)`;
+    logQuery(log, sql, [threadEntryId, template.description || '', template.title || '']);
+    await conn.query(sql, [threadEntryId, template.description || '', template.title || '']);
 
     const creationEventData = JSON.stringify({ type: 'task.created', title: template.title || '' });
-    await conn.query(
+    sql =
       `INSERT INTO ost_thread_event (thread_id, thread_type, dept_id, staff_id, uid_type, uid, username, timestamp, data)
-       VALUES (?, 'A', ?, ?, 'S', ?, ?, NOW(), ?)`
-      ,
-      [threadId, Number(template.departmentId) || null, staffId || null, staffId || null, staffUsername, creationEventData]
-    );
+       VALUES (?, 'A', ?, ?, 'S', ?, ?, NOW(), ?)`;
+    logQuery(log, sql, [
+      threadId,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffId || null,
+      staffUsername,
+      creationEventData
+    ]);
+    await conn.query(sql, [
+      threadId,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffId || null,
+      staffUsername,
+      creationEventData
+    ]);
 
     const assignEventData = JSON.stringify({ type: 'task.assigned', assignee: staffId || null });
-    await conn.query(
-      `INSERT INTO ost_thread_event (thread_id, thread_type, dept_id, staff_id, uid_type, uid, username, timestamp, data)
-       VALUES (?, 'A', ?, ?, 'S', ?, ?, NOW(), ?)`
-      ,
-      [threadId, Number(template.departmentId) || null, staffId || null, staffId || null, staffUsername, assignEventData]
-    );
+    logQuery(log, sql, [
+      threadId,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffId || null,
+      staffUsername,
+      assignEventData
+    ]);
+    await conn.query(sql, [
+      threadId,
+      Number(template.departmentId) || null,
+      staffId || null,
+      staffId || null,
+      staffUsername,
+      assignEventData
+    ]);
 
     if (staffId) {
-      await conn.query('UPDATE ost_task SET staff_id = ? WHERE id = ? LIMIT 1', [staffId, taskId]);
+      sql = 'UPDATE ost_task SET staff_id = ? WHERE id = ? LIMIT 1';
+      logQuery(log, sql, [staffId, taskId]);
+      await conn.query(sql, [staffId, taskId]);
     }
 
+    log('[sql] COMMIT');
     await conn.commit();
 
     console.log(`Created task ${taskNumber} with id ${taskId}`);
@@ -217,6 +262,7 @@ async function createTaskFromTemplate({ template, dueDate, creationDate }) {
       }
     };
   } catch (err) {
+    log('[sql] ROLLBACK');
     await conn.rollback();
     throw err;
   } finally {
@@ -317,6 +363,11 @@ function getCreationForDate(template, today, log = () => {}) {
 async function run() {
   const verbose = process.argv.includes('--verbose') || process.argv.includes('-v');
   const logVerbose = (...args) => {
+    const isSql = typeof args[0] === 'string' && args[0].startsWith('[sql]');
+    if (isSql) {
+      console.log('[debug]', ...args);
+      return;
+    }
     if (verbose) {
       console.log('[debug]', ...args);
     }
@@ -349,7 +400,8 @@ async function run() {
       const { taskId, data } = await createTaskFromTemplate({
         template,
         dueDate: match.dueDate,
-        creationDate: match.creationDate
+        creationDate: match.creationDate,
+        log: scopedLog
       });
 
       scopedLog('Task created', {
