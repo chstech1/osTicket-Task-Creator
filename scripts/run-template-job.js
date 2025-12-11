@@ -125,8 +125,12 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
 
   const staffId = template.assignee?.type === 'staff' ? Number(template.assignee.id) || 0 : 0;
   const teamId = template.assignee?.type === 'team' ? Number(template.assignee.id) || 0 : 0;
-  const createdAt = creationDate ? toDateTimeString(creationDate) : toDateTimeString(new Date());
-  const dueAt = dueDate ? toDateTimeString(dueDate) : null;
+
+  const creationDateUtc = creationDate ? toDateOnly(creationDate) : toDateOnly(new Date());
+  const createdAt = toDateTimeString(creationDateUtc);
+
+  const dueDateAtFivePmEst = dueDate ? toDueDateAtFivePmEst(dueDate) : null;
+  const dueAt = dueDateAtFivePmEst ? toDateTimeString(dueDateAtFivePmEst) : null;
 
   const conn = await pool.getConnection();
 
@@ -404,11 +408,12 @@ async function run() {
     }
 
     try {
+      const creationDateUtc = toDateOnly(match.creationDate);
       const dueDateWithTime = toDueDateAtFivePmEst(match.dueDate);
       const { taskId, data } = await createTaskFromTemplate({
         template,
         dueDate: dueDateWithTime,
-        creationDate: match.creationDate,
+        creationDate: creationDateUtc,
         log: scopedLog
       });
 
@@ -425,7 +430,7 @@ async function run() {
         title: template.title,
         clientName: clientNameById.get(template.clientId) || null,
         dueDate: dueDateWithTime.toISOString().slice(0, 10),
-        creationDate: match.creationDate.toISOString().slice(0, 10),
+        creationDate: creationDateUtc.toISOString().slice(0, 10),
         dbPayload: data,
         createdAt: nowIso
       };
