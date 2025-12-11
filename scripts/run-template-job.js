@@ -17,6 +17,7 @@ const dbConfig = require('../db/config.json');
 
 const pool = mysql.createPool({
   ...dbConfig,
+  timezone: 'Z',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -32,6 +33,12 @@ fileStore.ensureFileSync(OUTPUT_PATH);
 function toDateOnly(dateInput) {
   const d = typeof dateInput === 'string' ? new Date(`${dateInput}T00:00:00Z`) : dateInput;
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function toDueDateAtFivePmEst(dateInput) {
+  const dateOnly = toDateOnly(dateInput);
+  // 5:00 PM EST (UTC-5) -> 22:00 UTC for the same calendar date
+  return new Date(Date.UTC(dateOnly.getUTCFullYear(), dateOnly.getUTCMonth(), dateOnly.getUTCDate(), 22));
 }
 
 function addDays(base, days) {
@@ -138,7 +145,7 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
       throw new Error('Task sequence (id=2) is missing.');
     }
     const taskNumber = seqRows[0].next;
-    sql = 'UPDATE ost_sequence SET next = ?, updated = NOW() WHERE id = ? LIMIT 1';
+    sql = 'UPDATE ost_sequence SET next = ?, updated = UTC_TIMESTAMP() WHERE id = ? LIMIT 1';
     logQuery(log, sql, [taskNumber + 1, 2]);
     await conn.query(sql, [taskNumber + 1, 2]);
 
@@ -167,7 +174,7 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
 
     sql =
       `INSERT INTO ost_form_entry (form_id, sort, created, updated, object_type, object_id)
-       VALUES (?, 1, NOW(), NOW(), 'A', ?)`;
+       VALUES (?, 1, UTC_TIMESTAMP(), UTC_TIMESTAMP(), 'A', ?)`;
     logQuery(log, sql, [MAIN_TASK_FORM_ID, taskId]);
     const [formEntryResult] = await conn.query(sql, [MAIN_TASK_FORM_ID, taskId]);
     const formEntryId = formEntryResult.insertId;
@@ -185,14 +192,14 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
     logQuery(log, sql, [taskId, template.title || '']);
     await conn.query(sql, [taskId, template.title || '']);
 
-    sql = `INSERT INTO ost_thread (object_id, object_type, created) VALUES (?, 'A', NOW())`;
+    sql = `INSERT INTO ost_thread (object_id, object_type, created) VALUES (?, 'A', UTC_TIMESTAMP())`;
     logQuery(log, sql, [taskId]);
     const [threadResult] = await conn.query(sql, [taskId]);
     const threadId = threadResult.insertId;
 
     sql =
       `INSERT INTO ost_thread_entry (created, updated, type, thread_id, format, staff_id, poster, title, body, flags)
-       VALUES (NOW(), NOW(), 'M', ?, 'html', ?, ?, ?, ?, 0)`;
+       VALUES (UTC_TIMESTAMP(), UTC_TIMESTAMP(), 'M', ?, 'html', ?, ?, ?, ?, 0)`;
     logQuery(log, sql, [threadId, staffId || 0, staffPoster, template.title || '', template.description || '']);
     const [entryResult] = await conn.query(sql, [threadId, staffId || 0, staffPoster, template.title || '', template.description || '']);
     const threadEntryId = entryResult.insertId;
@@ -204,7 +211,7 @@ async function createTaskFromTemplate({ template, dueDate, creationDate, log = c
     const creationEventData = JSON.stringify({ type: 'task.created', title: template.title || '' });
     sql =
       `INSERT INTO ost_thread_event (thread_id, thread_type, staff_id, team_id, dept_id, topic_id, uid_type, uid, username, timestamp, data)
-       VALUES (?, 'A', ?, ?, ?, 0, 'S', ?, ?, NOW(), ?)`;
+       VALUES (?, 'A', ?, ?, ?, 0, 'S', ?, ?, UTC_TIMESTAMP(), ?)`;
     logQuery(log, sql, [
       threadId,
       staffId || null,
@@ -397,9 +404,10 @@ async function run() {
     }
 
     try {
+      const dueDateWithTime = toDueDateAtFivePmEst(match.dueDate);
       const { taskId, data } = await createTaskFromTemplate({
         template,
-        dueDate: match.dueDate,
+        dueDate: dueDateWithTime,
         creationDate: match.creationDate,
         log: scopedLog
       });
@@ -416,7 +424,7 @@ async function run() {
         templateId: template.id,
         title: template.title,
         clientName: clientNameById.get(template.clientId) || null,
-        dueDate: match.dueDate.toISOString().slice(0, 10),
+        dueDate: dueDateWithTime.toISOString().slice(0, 10),
         creationDate: match.creationDate.toISOString().slice(0, 10),
         dbPayload: data,
         createdAt: nowIso
