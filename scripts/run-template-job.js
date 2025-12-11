@@ -13,6 +13,11 @@ const fileStore = require('../data/fileStore');
 const clientsStore = require('../data/clientsStore');
 const db = require('../db/db');
 
+const createTaskFromTemplate = db.createTaskFromTemplate;
+if (typeof createTaskFromTemplate !== 'function') {
+  throw new Error('Database helper is missing createTaskFromTemplate; please reinstall or update code.');
+}
+
 const OUTPUT_PATH = path.join(__dirname, '..', 'data', 'generated-tasks.json');
 fileStore.ensureFileSync(OUTPUT_PATH);
 

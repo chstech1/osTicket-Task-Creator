@@ -86,81 +86,54 @@ function assertReady() {
   }
 }
 
+function toDateTimeString(input, defaultTime = '00:00:00') {
+  if (!input) return null;
+  const date = input instanceof Date ? input : new Date(input);
+  const iso = date.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19) || defaultTime}`;
+}
+
 async function createTaskFromTemplate({ template, dueDate, creationDate }) {
   assertReady();
-  const connection = await pool.getConnection();
+
+  const conn = await pool.getConnection();
+  const createdAt = creationDate ? toDateTimeString(creationDate) : toDateTimeString(new Date());
+  const dueAt = dueDate ? toDateTimeString(dueDate) : null;
+  const staffId = template.assignee?.type === 'staff' ? Number(template.assignee.id) || 0 : 0;
+  const teamId = template.assignee?.type === 'team' ? Number(template.assignee.id) || 0 : 0;
+
+  const taskPayload = {
+    object_id: 0,
+    object_type: 'T',
+    number: `T${Date.now()}`,
+    dept_id: Number(template.departmentId) || 0,
+    staff_id: staffId,
+    team_id: teamId,
+    lock_id: 0,
+    flags: 0,
+    duedate: dueAt,
+    closed: null,
+    created: createdAt,
+    updated: createdAt
+  };
+
+  const cdataPayload = {
+    title: template.title || ''
+  };
 
   try {
-    const [columnsResult] = await connection.query('SHOW COLUMNS FROM ost_task');
-    const availableColumns = new Set(columnsResult.map((col) => col.Field));
-    const payload = {};
-    const setIfAvailable = (column, value) => {
-      if (availableColumns.has(column)) {
-        payload[column] = value;
-      }
-    };
-
-    setIfAvailable('object_type', 'T');
-    setIfAvailable('object_id', 0);
-    setIfAvailable('lock_id', 0);
-    setIfAvailable('flags', 0);
-    setIfAvailable('closed', null);
-
-    setIfAvailable('number', nextTaskNumber());
-    setIfAvailable('dept_id', Number(template.departmentId) || 0);
-
-    const staffId = template.assignee?.type === 'staff' ? Number(template.assignee.id) || 0 : 0;
-    const teamId = template.assignee?.type === 'team' ? Number(template.assignee.id) || 0 : 0;
-    setIfAvailable('staff_id', staffId);
-    setIfAvailable('team_id', teamId);
-
-    setIfAvailable('title', template.title);
-    if (dueDate) {
-      setIfAvailable('duedate', formatDateTime(dueDate));
-      setIfAvailable('est_duedate', formatDateTime(dueDate));
-    }
-
-    const createdAt = formatDateTime(creationDate || new Date());
-    setIfAvailable('created', createdAt);
-    setIfAvailable('updated', createdAt);
-
-    if (!Object.keys(payload).length) {
-      throw new Error('Could not determine suitable columns for ost_task insert.');
-    }
-
-    await connection.beginTransaction();
-    const [taskResult] = await connection.query('INSERT INTO ost_task SET ?', payload);
-
-    let cdataPayload = null;
-    try {
-      const [cdataColumnsResult] = await connection.query('SHOW COLUMNS FROM ost_task__cdata');
-      const availableCdataColumns = new Set(cdataColumnsResult.map((col) => col.Field));
-      cdataPayload = {};
-      const setCdataIfAvailable = (column, value) => {
-        if (availableCdataColumns.has(column)) {
-          cdataPayload[column] = value;
-        }
-      };
-
-      setCdataIfAvailable('task_id', taskResult.insertId);
-      setCdataIfAvailable('title', template.title || '');
-
-      if (Object.keys(cdataPayload).length) {
-        await connection.query('INSERT INTO ost_task__cdata SET ?', cdataPayload);
-      } else {
-        cdataPayload = null;
-      }
-    } catch (err) {
-      await connection.rollback();
-      throw new Error('Failed to create task metadata: ' + err.message);
-    }
-
-    await connection.commit();
-    return { taskId: taskResult.insertId, data: { task: payload, cdata: cdataPayload } };
+    await conn.beginTransaction();
+    const [taskResult] = await conn.query('INSERT INTO ost_task SET ?', taskPayload);
+    const taskId = taskResult.insertId;
+    cdataPayload.task_id = taskId;
+    await conn.query('INSERT INTO ost_task__cdata SET ?', cdataPayload);
+    await conn.commit();
+    return { taskId, data: { task: taskPayload, cdata: cdataPayload } };
   } catch (err) {
-    throw new Error('Failed to create task from template: ' + err.message);
+    await conn.rollback();
+    throw new Error('Failed to create osTicket task: ' + err.message);
   } finally {
-    connection.release();
+    conn.release();
   }
 }
 
