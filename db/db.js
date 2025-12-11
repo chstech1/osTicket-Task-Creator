@@ -93,31 +93,70 @@ async function createTaskFromTemplate({ template, dueDate, creationDate }) {
   try {
     const [columnsResult] = await connection.query('SHOW COLUMNS FROM ost_task');
     const availableColumns = new Set(columnsResult.map((col) => col.Field));
-
     const payload = {};
-    if (availableColumns.has('number')) payload.number = nextTaskNumber();
-    if (availableColumns.has('dept_id')) payload.dept_id = template.departmentId ?? null;
-    if (availableColumns.has('staff_id') && template.assignee?.type === 'staff') {
-      payload.staff_id = template.assignee.id;
+    const setIfAvailable = (column, value) => {
+      if (availableColumns.has(column)) {
+        payload[column] = value;
+      }
+    };
+
+    setIfAvailable('object_type', 'T');
+    setIfAvailable('object_id', 0);
+    setIfAvailable('lock_id', 0);
+    setIfAvailable('flags', 0);
+    setIfAvailable('closed', null);
+
+    setIfAvailable('number', nextTaskNumber());
+    setIfAvailable('dept_id', Number(template.departmentId) || 0);
+
+    const staffId = template.assignee?.type === 'staff' ? Number(template.assignee.id) || 0 : 0;
+    const teamId = template.assignee?.type === 'team' ? Number(template.assignee.id) || 0 : 0;
+    setIfAvailable('staff_id', staffId);
+    setIfAvailable('team_id', teamId);
+
+    setIfAvailable('title', template.title);
+    if (dueDate) {
+      setIfAvailable('duedate', formatDateTime(dueDate));
+      setIfAvailable('est_duedate', formatDateTime(dueDate));
     }
-    if (availableColumns.has('team_id') && template.assignee?.type === 'team') {
-      payload.team_id = template.assignee.id;
-    }
-    if (availableColumns.has('title')) payload.title = template.title;
-    if (availableColumns.has('duedate') && dueDate) payload.duedate = formatDateTime(dueDate);
-    if (availableColumns.has('est_duedate') && dueDate) payload.est_duedate = formatDateTime(dueDate);
 
     const createdAt = formatDateTime(creationDate || new Date());
-    if (availableColumns.has('created')) payload.created = createdAt;
-    if (availableColumns.has('updated')) payload.updated = createdAt;
+    setIfAvailable('created', createdAt);
+    setIfAvailable('updated', createdAt);
 
     if (!Object.keys(payload).length) {
       throw new Error('Could not determine suitable columns for ost_task insert.');
     }
 
-    const [result] = await connection.query('INSERT INTO ost_task SET ?', payload);
+    await connection.beginTransaction();
+    const [taskResult] = await connection.query('INSERT INTO ost_task SET ?', payload);
 
-    return { taskId: result.insertId, data: payload };
+    let cdataPayload = null;
+    try {
+      const [cdataColumnsResult] = await connection.query('SHOW COLUMNS FROM ost_task__cdata');
+      const availableCdataColumns = new Set(cdataColumnsResult.map((col) => col.Field));
+      cdataPayload = {};
+      const setCdataIfAvailable = (column, value) => {
+        if (availableCdataColumns.has(column)) {
+          cdataPayload[column] = value;
+        }
+      };
+
+      setCdataIfAvailable('task_id', taskResult.insertId);
+      setCdataIfAvailable('title', template.title || '');
+
+      if (Object.keys(cdataPayload).length) {
+        await connection.query('INSERT INTO ost_task__cdata SET ?', cdataPayload);
+      } else {
+        cdataPayload = null;
+      }
+    } catch (err) {
+      await connection.rollback();
+      throw new Error('Failed to create task metadata: ' + err.message);
+    }
+
+    await connection.commit();
+    return { taskId: taskResult.insertId, data: { task: payload, cdata: cdataPayload } };
   } catch (err) {
     throw new Error('Failed to create task from template: ' + err.message);
   } finally {
