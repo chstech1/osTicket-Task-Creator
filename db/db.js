@@ -185,11 +185,79 @@ function getStatus() {
   return { hasError: Boolean(initError), error: initError ? initError.message : null };
 }
 
+/**
+ * Fetch open osTicket tasks for calendar use.
+ *
+ * ADJUST THESE TABLES/COLUMNS if your osTicket schema differs:
+ *  - ost_task: task_id, duedate, closed, status_id, staff_id, team_id
+ *  - ost_task__cdata: task_id, title
+ *  - ost_staff: staff_id, firstname, lastname
+ *  - ost_team: team_id, name
+ */
+async function getOpenTasks() {
+  assertReady();
+  const sql = `
+    SELECT
+      t.task_id AS taskId,
+      t.duedate AS dueDate,
+      t.closed,
+      t.status_id,
+      t.staff_id,
+      t.team_id,
+      cd.title,
+      s.${columns.staffFirst} AS staffFirst,
+      s.${columns.staffLast} AS staffLast,
+      tm.${columns.teamName} AS teamName
+    FROM ost_task t
+    LEFT JOIN ost_task__cdata cd ON cd.task_id = t.task_id
+    LEFT JOIN ost_staff s ON s.${columns.staffId} = t.staff_id
+    LEFT JOIN ost_team tm ON tm.${columns.teamId} = t.team_id
+    WHERE (t.closed IS NULL OR t.closed = '' OR t.closed = '0000-00-00 00:00:00')
+  `;
+
+  try {
+    const [rows] = await pool.query(sql);
+    return rows
+      .filter((row) => {
+        // Best-effort filter to exclude closed/resolved tasks based on status values when present.
+        if (row.status_id && Number(row.status_id) === 3) return false;
+        return Boolean(row.dueDate);
+      })
+      .map((row) => {
+        let assignee = { type: 'none', id: null, displayName: 'Unassigned' };
+        if (row.staff_id) {
+          assignee = {
+            type: 'staff',
+            id: Number(row.staff_id),
+            displayName: `${row.staffFirst || ''} ${row.staffLast || ''}`.trim() || `Staff ${row.staff_id}`
+          };
+        } else if (row.team_id) {
+          assignee = {
+            type: 'team',
+            id: Number(row.team_id),
+            displayName: row.teamName || `Team ${row.team_id}`
+          };
+        }
+
+        return {
+          taskId: row.taskId,
+          title: row.title || `Task ${row.taskId}`,
+          dueDate: row.dueDate,
+          assignee
+        };
+      });
+  } catch (err) {
+    console.error('Failed to load open tasks:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   getDepartments,
   getTeams,
   getStaff,
   columns,
   getStatus,
-  createTaskFromTemplate
+  createTaskFromTemplate,
+  getOpenTasks
 };

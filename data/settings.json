@@ -1,0 +1,18 @@
+{
+  "osticketBaseUrl": "https://tickets.welkeptbooks.com",
+  "taskUrlPattern": "/scp/tasks.php?id={taskId}",
+  "calendar": {
+    "colors": {
+      "openTaskDue": "#0d6efd",
+      "futureCreation": "#20c997",
+      "futureDue": "#ffc107"
+    },
+    "defaults": {
+      "showOpenTaskDue": true,
+      "showFutureCreation": true,
+      "showFutureDue": true
+    },
+    "timezone": "America/New_York",
+    "horizonDays": 180
+  }
+}
