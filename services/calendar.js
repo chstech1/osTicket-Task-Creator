@@ -131,6 +131,7 @@ async function generateTemplateEvents({ start, end, layers, clientId, assigneeTy
 
   const staffLookup = new Map(reference.staff.map((s) => [Number(s.id), s]));
   const teamLookup = new Map(reference.teams.map((t) => [Number(t.id), t]));
+  const today = startOfDayInZone(new Date(), settings.calendar.timezone) || new Date();
   const colorCreation = settings.calendar.colors.futureCreation;
   const colorDue = settings.calendar.colors.futureDue;
 
@@ -148,7 +149,9 @@ async function generateTemplateEvents({ start, end, layers, clientId, assigneeTy
     let dueDate = startOfDayInZone(firstDueDate, settings.calendar.timezone);
     let iterations = 0;
 
-    while (dueDate && dueDate < start && iterations < maxIterations) {
+    const minStart = start > today ? start : today;
+
+    while (dueDate && dueDate < minStart && iterations < maxIterations) {
       dueDate = nextDueDate(dueDate, template.recurrence);
       iterations += 1;
     }
@@ -158,7 +161,7 @@ async function generateTemplateEvents({ start, end, layers, clientId, assigneeTy
       const dueDateStr = formatDate(dueDate);
       const creationDateStr = formatDate(creationDate);
 
-      if (layers.futureDue && dueDate >= start) {
+      if (layers.futureDue && dueDate >= today) {
         events.push({
           id: `tmplDue-${template.id}-${dueDateStr}`,
           title: `${template.title} (Due)`,
@@ -176,7 +179,7 @@ async function generateTemplateEvents({ start, end, layers, clientId, assigneeTy
         });
       }
 
-      if (layers.futureCreation && creationDate >= start && creationDate <= end) {
+      if (layers.futureCreation && creationDate >= today && creationDate <= end) {
         events.push({
           id: `tmplCreate-${template.id}-${creationDateStr}`,
           title: `${template.title} (Create)`,
