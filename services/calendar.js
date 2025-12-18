@@ -197,11 +197,11 @@ async function generateTemplateEvents({ start, end, layers, clientId, assigneeTy
   return events;
 }
 
-async function generateOpenTaskEvents({ layers, clientId, assigneeType, assigneeId, settings }) {
+async function generateTaskEvents({ layers, clientId, assigneeType, assigneeId, settings, start, end }) {
   if (!layers.openDue) return [];
+  if (start > end) return [];
   try {
-    const tasks = await db.getOpenTasks();
-    const color = settings.calendar.colors.openTaskDue;
+    const tasks = await db.getTasksByDueDateRange({ start, end, includeClosed: true });
     const events = tasks
       .filter((task) => {
         if (!shouldIncludeClient(task.clientId, clientId)) return false;
@@ -212,8 +212,9 @@ async function generateOpenTaskEvents({ layers, clientId, assigneeType, assignee
       })
       .map((task) => {
         const dueDateStr = formatDate(toDateOnly(task.dueDate));
+        const color = task.isClosed ? settings.calendar.colors.closedTaskDue : settings.calendar.colors.openTaskDue;
         return {
-          id: `open-${task.taskId}`,
+          id: `task-${task.taskId}`,
           title: task.title,
           start: dueDateStr,
           allDay: true,
@@ -224,13 +225,14 @@ async function generateOpenTaskEvents({ layers, clientId, assigneeType, assignee
             taskId: task.taskId,
             assignee: task.assignee,
             clientId: task.clientId,
+            isClosed: task.isClosed,
             url: buildTaskUrl(task.taskId, settings)
           }
         };
       });
     return events;
   } catch (err) {
-    console.error('Failed to load open tasks for calendar:', err.message);
+    console.error('Failed to load tasks for calendar:', err.message);
     return [];
   }
 }
@@ -246,6 +248,12 @@ async function getCalendarEvents(params) {
   const clampedStart = start < windowStart ? windowStart : start;
   const clampedEnd = end > windowEnd ? windowEnd : end;
 
+  const taskWindow = settings.calendar.taskWindow || {};
+  const taskStartLimit = addDays(now, -Number(taskWindow.pastDays || 0));
+  const taskEndLimit = addDays(now, Number(taskWindow.futureDays || 0));
+  const taskRangeStart = start < taskStartLimit ? taskStartLimit : start;
+  const taskRangeEnd = end > taskEndLimit ? taskEndLimit : end;
+
   const layers = {
     openDue: params.layers?.includes('openDue'),
     futureCreation: params.layers?.includes('futureCreation'),
@@ -253,12 +261,14 @@ async function getCalendarEvents(params) {
   };
 
   const [openEvents, templateEvents] = await Promise.all([
-    generateOpenTaskEvents({
+    generateTaskEvents({
       layers,
       clientId: params.clientId,
       assigneeType: params.assigneeType,
       assigneeId: params.assigneeId,
-      settings
+      settings,
+      start: taskRangeStart,
+      end: taskRangeEnd
     }),
     generateTemplateEvents({
       start: clampedStart,

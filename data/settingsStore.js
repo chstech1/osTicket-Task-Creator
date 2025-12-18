@@ -10,6 +10,7 @@ const defaultSettings = {
   calendar: {
     colors: {
       openTaskDue: '#0d6efd',
+      closedTaskDue: '#6c757d',
       futureCreation: '#20c997',
       futureDue: '#ffc107'
     },
@@ -19,7 +20,11 @@ const defaultSettings = {
       showFutureDue: true
     },
     timezone: 'America/New_York',
-    horizonDays: 180
+    horizonDays: 180,
+    taskWindow: {
+      pastDays: 365,
+      futureDays: 365
+    }
   }
 };
 
@@ -48,6 +53,10 @@ function mergeWithDefaults(settings) {
       defaults: {
         ...defaultSettings.calendar.defaults,
         ...(settings?.calendar?.defaults || {})
+      },
+      taskWindow: {
+        ...defaultSettings.calendar.taskWindow,
+        ...(settings?.calendar?.taskWindow || {})
       }
     }
   };

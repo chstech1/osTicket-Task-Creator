@@ -210,6 +210,7 @@ app.post('/settings', async (req, res) => {
 
   const colors = {
     openTaskDue: (req.body.color_openTaskDue || current.calendar.colors.openTaskDue || '').trim(),
+    closedTaskDue: (req.body.color_closedTaskDue || current.calendar.colors.closedTaskDue || '').trim(),
     futureCreation: (req.body.color_futureCreation || current.calendar.colors.futureCreation || '').trim(),
     futureDue: (req.body.color_futureDue || current.calendar.colors.futureDue || '').trim()
   };
@@ -225,9 +226,22 @@ app.post('/settings', async (req, res) => {
     errors.push('Timezone is required.');
   }
 
-  const horizonDays = Number.parseInt(req.body.horizonDays, 10);
-  if (Number.isNaN(horizonDays) || horizonDays < 0) {
+  const parsedHorizon = Number.parseInt(req.body.horizonDays, 10);
+  const horizonDays = Number.isNaN(parsedHorizon) ? current.calendar.horizonDays : parsedHorizon;
+  if (Number.isNaN(parsedHorizon) || parsedHorizon < 0) {
     errors.push('horizonDays must be a non-negative integer.');
+  }
+
+  const parsedTaskWindowPast = Number.parseInt(req.body.taskWindowPast, 10);
+  const taskWindowPast = Number.isNaN(parsedTaskWindowPast) ? current.calendar.taskWindow.pastDays : parsedTaskWindowPast;
+  if (Number.isNaN(parsedTaskWindowPast) || parsedTaskWindowPast < 0) {
+    errors.push('Past task window must be a non-negative integer.');
+  }
+
+  const parsedTaskWindowFuture = Number.parseInt(req.body.taskWindowFuture, 10);
+  const taskWindowFuture = Number.isNaN(parsedTaskWindowFuture) ? current.calendar.taskWindow.futureDays : parsedTaskWindowFuture;
+  if (Number.isNaN(parsedTaskWindowFuture) || parsedTaskWindowFuture < 0) {
+    errors.push('Future task window must be a non-negative integer.');
   }
 
   const osticketBaseUrl = (req.body.osticketBaseUrl || '').trim();
@@ -248,7 +262,11 @@ app.post('/settings', async (req, res) => {
       ...current.calendar,
       colors,
       timezone,
-      horizonDays
+      horizonDays,
+      taskWindow: {
+        pastDays: taskWindowPast,
+        futureDays: taskWindowFuture
+      }
     }
   };
 

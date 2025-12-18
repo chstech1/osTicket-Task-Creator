@@ -43,6 +43,10 @@
         <input type="color" class="form-control form-control-color" id="color_openTaskDue" name="color_openTaskDue" value="<%= settings.calendar.colors.openTaskDue %>" />
       </div>
       <div class="col-md-4">
+        <label class="form-label" for="color_closedTaskDue">Closed task due color</label>
+        <input type="color" class="form-control form-control-color" id="color_closedTaskDue" name="color_closedTaskDue" value="<%= settings.calendar.colors.closedTaskDue %>" />
+      </div>
+      <div class="col-md-4">
         <label class="form-label" for="color_futureCreation">Future creation color</label>
         <input type="color" class="form-control form-control-color" id="color_futureCreation" name="color_futureCreation" value="<%= settings.calendar.colors.futureCreation %>" />
       </div>
@@ -59,6 +63,16 @@
         <label class="form-label" for="horizonDays">Future horizon (days)</label>
         <input type="number" min="0" class="form-control" id="horizonDays" name="horizonDays" value="<%= settings.calendar.horizonDays %>" />
         <div class="form-text">How far into the future to project template-based events.</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="taskWindowPast">Past task window (days)</label>
+        <input type="number" min="0" class="form-control" id="taskWindowPast" name="taskWindowPast" value="<%= settings.calendar.taskWindow.pastDays %>" />
+        <div class="form-text">How many days in the past to include osTicket tasks.</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="taskWindowFuture">Future task window (days)</label>
+        <input type="number" min="0" class="form-control" id="taskWindowFuture" name="taskWindowFuture" value="<%= settings.calendar.taskWindow.futureDays %>" />
+        <div class="form-text">How many days into the future to include osTicket tasks.</div>
       </div>
     </div>
   </div>

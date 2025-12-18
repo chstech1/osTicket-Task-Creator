@@ -2,10 +2,11 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
     <h1 class="h3 mb-0">Calendar</h1>
-    <p class="text-muted">Visualize open osTicket tasks alongside upcoming template-based work.</p>
+    <p class="text-muted">Visualize osTicket tasks (open and closed) alongside upcoming template-based work.</p>
   </div>
   <div class="text-end">
     <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.openTaskDue %>">Open Tasks Due Dates</div>
+    <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.closedTaskDue %>">Closed Tasks Due Dates</div>
     <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.futureCreation %>">Future Task Creation Dates</div>
     <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.futureDue %>">Future Task Due Dates</div>
   </div>
@@ -21,7 +22,7 @@
       <div class="col-md-4">
         <div class="form-check">
           <input class="form-check-input layer-toggle" type="checkbox" id="layer-openDue" value="openDue" <%= settings.calendar.defaults.showOpenTaskDue ? 'checked' : '' %> />
-          <label class="form-check-label" for="layer-openDue">Open Tasks Due Dates (osTicket)</label>
+          <label class="form-check-label" for="layer-openDue">Tasks Due Dates (osTicket)</label>
         </div>
         <div class="form-check">
           <input class="form-check-input layer-toggle" type="checkbox" id="layer-futureCreation" value="futureCreation" <%= settings.calendar.defaults.showFutureCreation ? 'checked' : '' %> />
