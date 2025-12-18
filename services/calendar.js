@@ -3,7 +3,9 @@ const settingsStore = require('../data/settingsStore');
 const db = require('../db/db');
 
 function toDateOnly(dateInput) {
-  const d = typeof dateInput === 'string' ? new Date(`${dateInput}T00:00:00Z`) : new Date(dateInput);
+  if (!dateInput) return null;
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (Number.isNaN(d.getTime())) return null;
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
@@ -18,6 +20,7 @@ function formatDate(date) {
 }
 
 function startOfDayInZone(date, timeZone) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
@@ -139,7 +142,10 @@ async function generateTemplateEvents({ start, end, layers, clientId, assigneeTy
     const assignee = templateAssignee(template, staffLookup, teamLookup);
     if (!assigneeMatchesFilters(assignee, assigneeType, assigneeId)) return;
 
-    let dueDate = startOfDayInZone(toDateOnly(template.firstDueDate), settings.calendar.timezone);
+    const firstDueDate = toDateOnly(template.firstDueDate);
+    if (!firstDueDate) return;
+
+    let dueDate = startOfDayInZone(firstDueDate, settings.calendar.timezone);
     let iterations = 0;
 
     while (dueDate && dueDate < start && iterations < maxIterations) {
@@ -211,7 +217,9 @@ async function generateTaskEvents({ layers, clientId, assigneeType, assigneeId, 
         return true;
       })
       .map((task) => {
-        const dueDateStr = formatDate(toDateOnly(task.dueDate));
+        const dueDateOnly = toDateOnly(task.dueDate);
+        if (!dueDateOnly) return null;
+        const dueDateStr = formatDate(dueDateOnly);
         const color = task.isClosed ? settings.calendar.colors.closedTaskDue : settings.calendar.colors.openTaskDue;
         return {
           id: `task-${task.taskId}`,
@@ -229,7 +237,8 @@ async function generateTaskEvents({ layers, clientId, assigneeType, assigneeId, 
             url: buildTaskUrl(task.taskId, settings)
           }
         };
-      });
+      })
+      .filter(Boolean);
     return events;
   } catch (err) {
     console.error('Failed to load tasks for calendar:', err.message);
@@ -241,8 +250,11 @@ async function getCalendarEvents(params) {
   const settings = await settingsStore.getSettings();
   const start = toDateOnly(params.start);
   const end = toDateOnly(params.end);
+  if (!start || !end) {
+    throw new Error('Invalid date range supplied to calendar');
+  }
 
-  const now = startOfDayInZone(new Date(), settings.calendar.timezone);
+  const now = startOfDayInZone(new Date(), settings.calendar.timezone) || new Date();
   const windowStart = addDays(now, -14);
   const windowEnd = addDays(now, Number(settings.calendar.horizonDays || 0));
   const clampedStart = start < windowStart ? windowStart : start;
