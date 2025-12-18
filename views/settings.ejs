@@ -1,0 +1,84 @@
+<%- include('partials/header', { title }) %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-0">Settings</h1>
+    <p class="text-muted">Configure calendar defaults and osTicket links.</p>
+  </div>
+</div>
+
+<% if (errors && errors.length) { %>
+  <div class="alert alert-danger" role="alert">
+    <ul class="mb-0">
+      <% errors.forEach((err) => { %>
+        <li><%= err %></li>
+      <% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<% if (message) { %>
+  <div class="alert alert-success" role="alert"><%= message %></div>
+<% } %>
+
+<form method="POST" action="/settings" class="card">
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="osticketBaseUrl">osTicket base URL</label>
+        <input type="url" class="form-control" id="osticketBaseUrl" name="osticketBaseUrl" value="<%= settings.osticketBaseUrl %>" required />
+        <div class="form-text">Used when linking to existing osTicket tasks.</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="taskUrlPattern">Task URL pattern</label>
+        <input type="text" class="form-control" id="taskUrlPattern" name="taskUrlPattern" value="<%= settings.taskUrlPattern %>" required />
+        <div class="form-text">Include {taskId} where the id should appear. Example: /scp/tasks.php?id={taskId}</div>
+      </div>
+    </div>
+
+    <hr />
+    <h5>Calendar display</h5>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label" for="color_openTaskDue">Open task due color</label>
+        <input type="color" class="form-control form-control-color" id="color_openTaskDue" name="color_openTaskDue" value="<%= settings.calendar.colors.openTaskDue %>" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="color_closedTaskDue">Closed task due color</label>
+        <input type="color" class="form-control form-control-color" id="color_closedTaskDue" name="color_closedTaskDue" value="<%= settings.calendar.colors.closedTaskDue %>" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="color_futureCreation">Future creation color</label>
+        <input type="color" class="form-control form-control-color" id="color_futureCreation" name="color_futureCreation" value="<%= settings.calendar.colors.futureCreation %>" />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="color_futureDue">Future due color</label>
+        <input type="color" class="form-control form-control-color" id="color_futureDue" name="color_futureDue" value="<%= settings.calendar.colors.futureDue %>" />
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="timezone">Timezone</label>
+        <input type="text" class="form-control" id="timezone" name="timezone" value="<%= settings.calendar.timezone %>" />
+        <div class="form-text">IANA timezone string, e.g. America/New_York</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="horizonDays">Future horizon (days)</label>
+        <input type="number" min="0" class="form-control" id="horizonDays" name="horizonDays" value="<%= settings.calendar.horizonDays %>" />
+        <div class="form-text">How far into the future to project template-based events.</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="taskWindowPast">Past task window (days)</label>
+        <input type="number" min="0" class="form-control" id="taskWindowPast" name="taskWindowPast" value="<%= settings.calendar.taskWindow.pastDays %>" />
+        <div class="form-text">How many days in the past to include osTicket tasks.</div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="taskWindowFuture">Future task window (days)</label>
+        <input type="number" min="0" class="form-control" id="taskWindowFuture" name="taskWindowFuture" value="<%= settings.calendar.taskWindow.futureDays %>" />
+        <div class="form-text">How many days into the future to include osTicket tasks.</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer text-end">
+    <button type="submit" class="btn btn-primary">Save settings</button>
+  </div>
+</form>
+
+<%- include('partials/footer') %>
