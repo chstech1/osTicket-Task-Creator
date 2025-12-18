@@ -1,0 +1,77 @@
+<%- include('partials/header', { title }) %>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-0">Calendar</h1>
+    <p class="text-muted">Visualize osTicket tasks (open and closed) alongside upcoming template-based work.</p>
+  </div>
+  <div class="text-end">
+    <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.openTaskDue %>">Open Tasks Due Dates</div>
+    <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.closedTaskDue %>">Closed Tasks Due Dates</div>
+    <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.futureCreation %>">Future Task Creation Dates</div>
+    <div class="legend-item" style="--legend-color: <%= settings.calendar.colors.futureDue %>">Future Task Due Dates</div>
+  </div>
+</div>
+
+<% if (dbError) { %>
+  <div class="alert alert-warning">Unable to load live osTicket reference data: <%= dbError %></div>
+<% } %>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <div class="form-check">
+          <input class="form-check-input layer-toggle" type="checkbox" id="layer-openDue" value="openDue" <%= settings.calendar.defaults.showOpenTaskDue ? 'checked' : '' %> />
+          <label class="form-check-label" for="layer-openDue">Tasks Due Dates (osTicket)</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input layer-toggle" type="checkbox" id="layer-futureCreation" value="futureCreation" <%= settings.calendar.defaults.showFutureCreation ? 'checked' : '' %> />
+          <label class="form-check-label" for="layer-futureCreation">Future Task Creation Dates (templates)</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input layer-toggle" type="checkbox" id="layer-futureDue" value="futureDue" <%= settings.calendar.defaults.showFutureDue ? 'checked' : '' %> />
+          <label class="form-check-label" for="layer-futureDue">Future Task Due Dates (templates)</label>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="clientFilter">Filter by client</label>
+        <select class="form-select" id="clientFilter">
+          <option value="">All clients</option>
+          <% clients.forEach((client) => { %>
+            <option value="<%= client.id %>"><%= client.name %></option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="assigneeFilter">Filter by assignee</label>
+        <select class="form-select" id="assigneeFilter">
+          <option value="">All assignees</option>
+          <% referenceData.staff.forEach((staff) => { %>
+            <option value="staff:<%= staff.id %>">Staff: <%= staff.displayName %> (id=<%= staff.id %>)</option>
+          <% }) %>
+          <% referenceData.teams.forEach((team) => { %>
+            <option value="team:<%= team.id %>">Team: <%= team.name %> (id=<%= team.id %>)</option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="calendarAlert" class="alert alert-danger d-none" role="alert"></div>
+
+<div id="calendar"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script>
+  const calendarPageData = {
+    settings: <%- JSON.stringify(settings) %>,
+    defaultLayers: {
+      openDue: <%= settings.calendar.defaults.showOpenTaskDue ? 'true' : 'false' %>,
+      futureCreation: <%= settings.calendar.defaults.showFutureCreation ? 'true' : 'false' %>,
+      futureDue: <%= settings.calendar.defaults.showFutureDue ? 'true' : 'false' %>
+    }
+  };
+</script>
+<script src="/js/calendar.js"></script>
+<%- include('partials/footer') %>

@@ -3,6 +3,8 @@ const path = require('path');
 const clientsStore = require('./data/clientsStore');
 const templatesStore = require('./data/templatesStore');
 const db = require('./db/db');
+const settingsStore = require('./data/settingsStore');
+const calendarService = require('./services/calendar');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -169,12 +171,116 @@ function validateTemplatePayload(body) {
   return errors;
 }
 
+function isHexColor(value) {
+  return /^#[0-9A-Fa-f]{6}$/.test(value || '');
+}
+
 // Page routes
 app.get('/', (req, res) => res.redirect('/templates'));
+
+app.get('/calendar', async (req, res) => {
+  const [clients, reference, settings] = await Promise.all([
+    clientsStore.getAll(),
+    loadReferenceData(),
+    settingsStore.getSettings()
+  ]);
+
+  res.render('calendar', {
+    title: 'Calendar',
+    clients,
+    referenceData: reference.data,
+    dbError: reference.error,
+    settings
+  });
+});
 
 app.get('/clients', async (req, res) => {
   const clients = await clientsStore.getAll();
   res.render('clients', { title: 'Clients', clients });
+});
+
+app.get('/settings', async (req, res) => {
+  const settings = await settingsStore.getSettings();
+  res.render('settings', { title: 'Settings', settings, errors: [], message: null });
+});
+
+app.post('/settings', async (req, res) => {
+  const current = await settingsStore.getSettings();
+  const errors = [];
+
+  const colors = {
+    openTaskDue: (req.body.color_openTaskDue || current.calendar.colors.openTaskDue || '').trim(),
+    closedTaskDue: (req.body.color_closedTaskDue || current.calendar.colors.closedTaskDue || '').trim(),
+    futureCreation: (req.body.color_futureCreation || current.calendar.colors.futureCreation || '').trim(),
+    futureDue: (req.body.color_futureDue || current.calendar.colors.futureDue || '').trim()
+  };
+
+  Object.entries(colors).forEach(([key, value]) => {
+    if (!isHexColor(value)) {
+      errors.push(`${key} must be a 6-character hex color like #ff0000.`);
+    }
+  });
+
+  const timezone = (req.body.timezone || current.calendar.timezone || '').trim();
+  if (!timezone) {
+    errors.push('Timezone is required.');
+  }
+
+  const parsedHorizon = Number.parseInt(req.body.horizonDays, 10);
+  const horizonDays = Number.isNaN(parsedHorizon) ? current.calendar.horizonDays : parsedHorizon;
+  if (Number.isNaN(parsedHorizon) || parsedHorizon < 0) {
+    errors.push('horizonDays must be a non-negative integer.');
+  }
+
+  const parsedTaskWindowPast = Number.parseInt(req.body.taskWindowPast, 10);
+  const taskWindowPast = Number.isNaN(parsedTaskWindowPast) ? current.calendar.taskWindow.pastDays : parsedTaskWindowPast;
+  if (Number.isNaN(parsedTaskWindowPast) || parsedTaskWindowPast < 0) {
+    errors.push('Past task window must be a non-negative integer.');
+  }
+
+  const parsedTaskWindowFuture = Number.parseInt(req.body.taskWindowFuture, 10);
+  const taskWindowFuture = Number.isNaN(parsedTaskWindowFuture) ? current.calendar.taskWindow.futureDays : parsedTaskWindowFuture;
+  if (Number.isNaN(parsedTaskWindowFuture) || parsedTaskWindowFuture < 0) {
+    errors.push('Future task window must be a non-negative integer.');
+  }
+
+  const osticketBaseUrl = (req.body.osticketBaseUrl || '').trim();
+  if (!osticketBaseUrl || !/^https?:\/\//i.test(osticketBaseUrl)) {
+    errors.push('osticketBaseUrl must be a valid http(s) URL.');
+  }
+
+  const taskUrlPattern = (req.body.taskUrlPattern || current.taskUrlPattern || '').trim();
+  if (!taskUrlPattern.includes('{taskId}')) {
+    errors.push('taskUrlPattern must include {taskId}.');
+  }
+
+  const nextSettings = {
+    ...current,
+    osticketBaseUrl,
+    taskUrlPattern,
+    calendar: {
+      ...current.calendar,
+      colors,
+      timezone,
+      horizonDays,
+      taskWindow: {
+        pastDays: taskWindowPast,
+        futureDays: taskWindowFuture
+      }
+    }
+  };
+
+  if (errors.length) {
+    return res.status(400).render('settings', {
+      title: 'Settings',
+      settings: nextSettings,
+      errors,
+      message: null
+    });
+  }
+
+  const saved = await settingsStore.saveSettings(nextSettings);
+  res.render('settings', { title: 'Settings', settings: saved, errors: [], message: 'Settings updated successfully.' });
 });
 
 app.get('/templates', async (req, res) => {
@@ -226,6 +332,51 @@ app.get('/templates/:id/edit', async (req, res) => {
     referenceData: reference.data,
     dbError: reference.error
   });
+});
+
+app.get('/api/calendar/events', async (req, res) => {
+  const { start, end } = req.query;
+  const settings = await settingsStore.getSettings();
+  if (!start || !end || Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end))) {
+    return res.status(400).json({ error: 'Invalid start/end query params.', events: [] });
+  }
+
+  const allowedLayers = ['openDue', 'futureCreation', 'futureDue'];
+  const requestedLayers = (req.query.layers || '')
+    .split(',')
+    .map((l) => l.trim())
+    .filter((l) => allowedLayers.includes(l));
+
+  const defaults = settings.calendar?.defaults || {};
+  const defaultLayers = [];
+  if (defaults.showOpenTaskDue) defaultLayers.push('openDue');
+  if (defaults.showFutureCreation) defaultLayers.push('futureCreation');
+  if (defaults.showFutureDue) defaultLayers.push('futureDue');
+  const layers = requestedLayers.length ? requestedLayers : defaultLayers.length ? defaultLayers : allowedLayers;
+
+  const assigneeType = req.query.assigneeType || '';
+  const assigneeId = req.query.assigneeId;
+  if (assigneeType && !['staff', 'team'].includes(assigneeType)) {
+    return res.status(400).json({ error: 'Invalid assigneeType.', events: [] });
+  }
+  if (assigneeId && !assigneeType) {
+    return res.status(400).json({ error: 'assigneeType is required when assigneeId is provided.', events: [] });
+  }
+
+  try {
+    const events = await calendarService.getCalendarEvents({
+      start,
+      end,
+      layers,
+      clientId: req.query.clientId,
+      assigneeType: assigneeType || undefined,
+      assigneeId
+    });
+    res.json(events);
+  } catch (err) {
+    console.error('Calendar events failed:', err.message);
+    res.status(500).json([]);
+  }
 });
 
 // API routes for osTicket lookup data
